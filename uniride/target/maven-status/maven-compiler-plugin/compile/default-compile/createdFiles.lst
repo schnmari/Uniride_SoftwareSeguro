@@ -12,4 +12,5 @@ com/uniride/repository/UsuarioRepository.class
 com/uniride/view/MenuView.class
 com/uniride/model/Viagem.class
 com/uniride/controller/UsuarioController.class
+com/uniride/service/LogService.class
 com/uniride/service/SenhaService.class
