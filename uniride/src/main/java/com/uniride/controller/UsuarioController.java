@@ -91,8 +91,15 @@ public class UsuarioController {
             return;
         }
 
+        boolean confirma = view.lerConfirmacao(
+                "Confirmo que as informações fornecidas são verdadeiras");
+        if (!confirma) {
+            System.out.println("\nHabilitação cancelada: confirmação não fornecida.");
+            return;
+        }
+
         try {
-            service.habilitarComoMotorista(usuario, cpf, registro, vencimento);
+            service.habilitarComoMotorista(usuario, cpf, registro, vencimento, confirma);
         } catch (IllegalArgumentException e) {
             // Rede de segurança: o service rejeitou os dados na fronteira de confiança.
             System.out.println("\n" + e.getMessage());

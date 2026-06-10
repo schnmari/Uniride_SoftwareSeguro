@@ -4,6 +4,10 @@ import com.uniride.model.Motorista;
 import com.uniride.model.Usuario;
 import com.uniride.repository.UsuarioRepository;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 public class UsuarioService {
@@ -70,10 +74,16 @@ public class UsuarioService {
         return ResultadoLogin.falha(restantes);
     }
 
-    public boolean habilitarComoMotorista(Usuario usuario, String cpf, String numeroRegistro, String dataVencimento) {
+    public boolean habilitarComoMotorista(Usuario usuario, String cpf, String numeroRegistro,
+                                           String dataVencimento, boolean confirmacaoVeracidade) {
         // T (A2) — fronteira de confiança: revalida os campos antes de processar,
         // independentemente de quem chamou. Dado inválido nunca vira um Motorista.
         validarDadosMotorista(cpf, numeroRegistro, dataVencimento);
+
+        // R (A2) — não-repúdio: exige confirmação explícita de veracidade.
+        if (!confirmacaoVeracidade) {
+            throw new IllegalArgumentException("É necessário confirmar que as informações são verdadeiras.");
+        }
 
         if (usuario.isMotorista()) return false;
         // S (A2) — impede dois usuários se habilitarem com o mesmo CPF
@@ -81,9 +91,13 @@ public class UsuarioService {
             throw new IllegalArgumentException("CPF já cadastrado para outro motorista.");
         }
         Motorista motorista = new Motorista(cpf, numeroRegistro, dataVencimento);
+        // R (A2) — comprovante de aceite: amarra identidade + dados + data + confirmação.
+        String comprovante = gerarComprovanteAceite(usuario, cpf, numeroRegistro, dataVencimento);
+        motorista.setComprovanteAceite(comprovante);
         usuario.setDadosMotorista(motorista);
         usuario.setMotorista(true);
         log.registrar("VIROU_MOTORISTA", "email=" + usuario.getEmail() + " id=" + usuario.getId());
+        log.registrar("TERMO_ACEITE", "email=" + usuario.getEmail() + " comprovante=" + comprovante);
         return true;
     }
 
@@ -92,6 +106,20 @@ public class UsuarioService {
                 || numeroRegistro == null || numeroRegistro.isBlank()
                 || dataVencimento == null || dataVencimento.isBlank()) {
             throw new IllegalArgumentException("CPF, número de registro e data de vencimento são obrigatórios.");
+        }
+    }
+
+    private String gerarComprovanteAceite(Usuario usuario, String cpf, String registro, String vencimento) {
+        String dados = usuario.getId() + "|" + usuario.getEmail() + "|" + cpf + "|" + registro
+                + "|" + vencimento + "|" + LocalDateTime.now() + "|CONFIRMADO";
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] hash = md.digest(dados.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hash) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("SHA-256 indisponível", e);
         }
     }
 
