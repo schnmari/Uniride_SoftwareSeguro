@@ -65,4 +65,4 @@ Os testes também rodam automaticamente a cada push e pull request, pela configu
 ## Equipe
 
 - Rafael de Faria Sato
-- Mari (schnmari)
+- Mariana Schneider Sobrinho
