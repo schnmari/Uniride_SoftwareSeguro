@@ -1,6 +1,7 @@
 import com.uniride.model.Usuario;
 import com.uniride.service.UsuarioService;
 import com.uniride.service.UsuarioService.ResultadoLogin;
+import com.uniride.service.ViagemService;
 
 /**
  * Teste manual da fronteira de confiança (linha T / Tampering).
@@ -84,5 +85,23 @@ public class TestTrust {
         s.cadastrar("Bia", "bia@uni.br", "123456", "02/02/2000");
         Usuario bia = s.autenticar("bia@uni.br", "123456").usuario;
         tentaMotorista(s, bia, "cpf duplicado",    "111",  "CNH999", "01/01/2030", true);
+
+        System.out.println();
+        System.out.println("=== A3: publicacao de carona (fronteira de confianca) ===");
+        ViagemService vs = new ViagemService();
+        tentaOferta(vs, ana, "titulo vazio",   "",      "Centro", "Campus", 10);
+        tentaOferta(vs, ana, "partida vazia",  "Carona","",       "Campus", 10);
+        tentaOferta(vs, ana, "preco negativo", "Carona","Centro", "Campus", -5);
+        tentaOferta(vs, ana, "valido",         "Carona","Centro", "Campus", 10);
+    }
+
+    // ---------- A3: publicacao de oferta ----------
+    static void tentaOferta(ViagemService vs, Usuario u, String desc, String titulo, String partida, String chegada, int preco) {
+        try {
+            vs.cadastrarOferta(titulo, "desc", partida, chegada, "01/01/2030 08:00", preco, u);
+            System.out.println("[" + desc + "] OK -> oferta publicada.");
+        } catch (IllegalArgumentException ex) {
+            System.out.println("[" + desc + "] BLOQUEADO pelo service -> " + ex.getMessage());
+        }
     }
 }
