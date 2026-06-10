@@ -48,6 +48,12 @@ public class UsuarioRepository {
         return usuarios.stream().anyMatch(u -> u.getEmail().equals(email));
     }
 
+    public boolean cpfJaCadastrado(String cpf) {
+        return usuarios.stream()
+                .map(Usuario::getDadosMotorista)
+                .anyMatch(m -> m != null && m.getCpf().equals(cpf));
+    }
+
     public boolean estaBloqueado(String email) {
         if (!bloqueios.containsKey(email)) return false;
         long desbloqueioEm = bloqueios.get(email);

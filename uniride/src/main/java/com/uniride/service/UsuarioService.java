@@ -4,14 +4,24 @@ import com.uniride.model.Motorista;
 import com.uniride.model.Usuario;
 import com.uniride.repository.UsuarioRepository;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 public class UsuarioService {
 
     private final UsuarioRepository repository = UsuarioRepository.getInstance();
     private final SenhaService senhaService = SenhaService.getInstance();
+    private final LogService log = LogService.getInstance();
 
     public boolean cadastrar(String nome, String email, String senha, String nascimento) {
+        // T1 — fronteira de confiança: revalida as entradas antes de persistir,
+        // independentemente de quem chamou (Tampering). Lança IllegalArgumentException
+        // para que dado inválido nunca chegue ao repositório.
+        validarDadosCadastro(nome, email, senha);
+
         if (repository.emailJaCadastrado(email)) {
             return false;
         }
@@ -19,12 +29,28 @@ public class UsuarioService {
         String senhaCriptografada = senhaService.criptografar(senha);
         Usuario usuario = new Usuario(repository.proximoId(), nome, email, senhaCriptografada, nascimento);
         repository.salvar(usuario);
+        log.registrar("CADASTRO", "email=" + email + " id=" + usuario.getId());
         return true;
+    }
+
+    private void validarDadosCadastro(String nome, String email, String senha) {
+        if (nome == null || nome.isBlank()
+                || email == null || email.isBlank()
+                || senha == null || senha.isBlank()) {
+            throw new IllegalArgumentException("Nome, e-mail e senha são obrigatórios.");
+        }
+        if (!email.contains("@")) {
+            throw new IllegalArgumentException("E-mail inválido.");
+        }
+        if (senha.length() < 6) {
+            throw new IllegalArgumentException("A senha deve ter ao menos 6 caracteres.");
+        }
     }
 
     public ResultadoLogin autenticar(String email, String senha) {
         // C1 — verifica bloqueio antes de qualquer coisa
         if (repository.estaBloqueado(email)) {
+            log.registrar("LOGIN_BLOQUEADO", "email=" + email);
             return ResultadoLogin.BLOQUEADO;
         }
 
@@ -32,6 +58,7 @@ public class UsuarioService {
 
         if (usuario.isPresent() && senhaService.verificar(senha, usuario.get().getSenha())) {
             repository.resetarTentativas(email);
+            log.registrar("LOGIN_SUCESSO", "email=" + email + " id=" + usuario.get().getId());
             return ResultadoLogin.sucesso(usuario.get());
         }
 
@@ -39,18 +66,61 @@ public class UsuarioService {
         int restantes = repository.tentativasRestantes(email);
 
         if (restantes <= 0) {
+            log.registrar("CONTA_BLOQUEADA", "email=" + email + " (excesso de tentativas)");
             return ResultadoLogin.BLOQUEADO;
         }
 
+        log.registrar("LOGIN_FALHA", "email=" + email + " restantes=" + restantes);
         return ResultadoLogin.falha(restantes);
     }
 
-    public boolean habilitarComoMotorista(Usuario usuario, String cpf, String numeroRegistro, String dataVencimento) {
+    public boolean habilitarComoMotorista(Usuario usuario, String cpf, String numeroRegistro,
+                                           String dataVencimento, boolean confirmacaoVeracidade) {
+        // T (A2) — fronteira de confiança: revalida os campos antes de processar,
+        // independentemente de quem chamou. Dado inválido nunca vira um Motorista.
+        validarDadosMotorista(cpf, numeroRegistro, dataVencimento);
+
+        // R (A2) — não-repúdio: exige confirmação explícita de veracidade.
+        if (!confirmacaoVeracidade) {
+            throw new IllegalArgumentException("É necessário confirmar que as informações são verdadeiras.");
+        }
+
         if (usuario.isMotorista()) return false;
+        // S (A2) — impede dois usuários se habilitarem com o mesmo CPF
+        if (repository.cpfJaCadastrado(cpf)) {
+            throw new IllegalArgumentException("CPF já cadastrado para outro motorista.");
+        }
         Motorista motorista = new Motorista(cpf, numeroRegistro, dataVencimento);
+        // R (A2) — comprovante de aceite: amarra identidade + dados + data + confirmação.
+        String comprovante = gerarComprovanteAceite(usuario, cpf, numeroRegistro, dataVencimento);
+        motorista.setComprovanteAceite(comprovante);
         usuario.setDadosMotorista(motorista);
         usuario.setMotorista(true);
+        log.registrar("VIROU_MOTORISTA", "email=" + usuario.getEmail() + " id=" + usuario.getId());
+        log.registrar("TERMO_ACEITE", "email=" + usuario.getEmail() + " comprovante=" + comprovante);
         return true;
+    }
+
+    private void validarDadosMotorista(String cpf, String numeroRegistro, String dataVencimento) {
+        if (cpf == null || cpf.isBlank()
+                || numeroRegistro == null || numeroRegistro.isBlank()
+                || dataVencimento == null || dataVencimento.isBlank()) {
+            throw new IllegalArgumentException("CPF, número de registro e data de vencimento são obrigatórios.");
+        }
+    }
+
+    private String gerarComprovanteAceite(Usuario usuario, String cpf, String registro, String vencimento) {
+        String dados = usuario.getId() + "|" + usuario.getEmail() + "|" + cpf + "|" + registro
+                + "|" + vencimento + "|" + LocalDateTime.now() + "|CONFIRMADO";
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] hash = md.digest(dados.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hash) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("SHA-256 indisponível", e);
+        }
     }
 
     // Classe interna para representar o resultado do login

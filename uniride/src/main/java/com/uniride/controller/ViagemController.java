@@ -58,7 +58,12 @@ public class ViagemController {
             return;
         }
 
-        service.cadastrarSolicitacao(titulo, descricao, partida, chegada, dataHora, preco, usuario);
+        try {
+            service.cadastrarSolicitacao(titulo, descricao, partida, chegada, dataHora, preco, usuario);
+        } catch (IllegalArgumentException e) {
+            System.out.println("\n" + e.getMessage());
+            return;
+        }
         System.out.println("\nSolicitação publicada.");
     }
 
@@ -91,7 +96,12 @@ public class ViagemController {
             return;
         }
 
-        service.cadastrarOferta(titulo, descricao, partida, chegada, dataHora, preco, usuario);
+        try {
+            service.cadastrarOferta(titulo, descricao, partida, chegada, dataHora, preco, usuario);
+        } catch (IllegalArgumentException e) {
+            System.out.println("\n" + e.getMessage());
+            return;
+        }
         System.out.println("\nOferta publicada.");
     }
 

@@ -34,7 +34,14 @@ public class UsuarioController {
             return;
         }
 
-        boolean sucesso = service.cadastrar(nome, email, senha, nascimento);
+        boolean sucesso;
+        try {
+            sucesso = service.cadastrar(nome, email, senha, nascimento);
+        } catch (IllegalArgumentException e) {
+            // Rede de segurança: o service rejeitou os dados na fronteira de confiança.
+            System.out.println("\n" + e.getMessage());
+            return;
+        }
 
         if (sucesso) {
             System.out.println("\nConta criada com sucesso.");
@@ -84,7 +91,20 @@ public class UsuarioController {
             return;
         }
 
-        service.habilitarComoMotorista(usuario, cpf, registro, vencimento);
+        boolean confirma = view.lerConfirmacao(
+                "Confirmo que as informações fornecidas são verdadeiras");
+        if (!confirma) {
+            System.out.println("\nHabilitação cancelada: confirmação não fornecida.");
+            return;
+        }
+
+        try {
+            service.habilitarComoMotorista(usuario, cpf, registro, vencimento, confirma);
+        } catch (IllegalArgumentException e) {
+            // Rede de segurança: o service rejeitou os dados na fronteira de confiança.
+            System.out.println("\n" + e.getMessage());
+            return;
+        }
         System.out.println("\nConta habilitada como motorista.");
     }
 }
