@@ -62,4 +62,10 @@ public class MenuView {
         System.out.print(campo + ": ");
         return scanner.nextLine().trim();
     }
+
+    public boolean lerConfirmacao(String pergunta) {
+        System.out.print(pergunta + " (s/n): ");
+        String r = scanner.nextLine().trim().toLowerCase();
+        return r.equals("s") || r.equals("sim");
+    }
 }
